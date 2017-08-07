@@ -158,7 +158,6 @@
 
             // NOTE: takes the `value` field of the `_previousData` object
             //       if the field was not specified. It means that it didn't changed.
-            console.log(data, data)
             this._previousData[key] = this._previousData[key] || {}
             _serialzeDataMatrix[key] = data[key]["value"] || this._previousData[key]["value"];
             
