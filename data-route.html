@@ -1,0 +1,36 @@
+<link rel="import" href="../polymer/polymer-element.html">
+
+<dom-module id="data-route">
+  <template>
+    <style>
+      :host {
+        display: block;
+      }
+    </style>
+    <h2>Hello [[prop1]]!</h2>
+  </template>
+
+  <script>
+    /**
+     * `data-route`
+     * A modular router supporting data-matrix pattern in path segments
+     *
+     * @customElement
+     * @polymer
+     * @demo demo/index.html
+     */
+    class DataRoute extends Polymer.Element {
+      static get is() { return 'data-route'; }
+      static get properties() {
+        return {
+          prop1: {
+            type: String,
+            value: 'data-route'
+          }
+        };
+      }
+    }
+
+    window.customElements.define(DataRoute.is, DataRoute);
+  </script>
+</dom-module>
