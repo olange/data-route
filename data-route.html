@@ -26,12 +26,12 @@
      *  
      *    { 
      *      foo: {
-     *       value: "view1",
-     *       arg: {paramA: "valA", paramB: "valB"},
+     *       segment: "view1",
+     *       arg:     {paramA: "valA", paramB: "valB"},
      *      },
      *      zoo: {
-     *        value: "view2",
-     *        args: {paramC: "valC"}
+     *        segment: "view2",
+     *        args:    {paramC: "valC"}
      *      }
      *    }  
      *      
@@ -68,15 +68,14 @@
             notify: false,
             observer: "_appDataChanged"
           },
-          /** The unserialized data structure that the used can use. */ 
+          /** The unserialized data structure that can be used. */ 
           data: {
             type: Object,
             notify: true,
             observer: "_dataChanged"
           },
           /**
-           * Used to determine the previous 'value' field when serializing 
-           * the data and the 'value' field is not specified.
+           * Used to determine the previous data.
            */
           _previousData: {
             type: Object,
@@ -122,7 +121,7 @@
       /** 
        * Unserializes the data matrix string given by the `appData` of the `<app-route>` 
        * and set the outputed `data` object that is exposed to the user.
-       * It also stores a copy of the `data` object to an instance variable
+       * It also stores a copy of the `data` object to the instance variable called `_previousData`
        * that is used to compute default values.
        */
       _appDataChanged(appData){
@@ -139,8 +138,8 @@
         Object.keys(appData).forEach( (key) => {
           var dataSegments = appData[key].split(";");
           deserialzedDataMatrix[key] = {}
-          deserialzedDataMatrix[key]["value"] = dataSegments.shift();
-          deserialzedDataMatrix[key]["args"] = {};
+          deserialzedDataMatrix[key].segment = dataSegments.shift();
+          deserialzedDataMatrix[key].args = {};
           dataSegments.forEach( (arg) => {
             [arg_key, arg_val] = arg.split("=");
             deserialzedDataMatrix[key]["args"][arg_key] = arg_val;
@@ -156,10 +155,10 @@
         Object.keys(data).forEach( (key) => {
           if(key != "args"){
 
-            // NOTE: takes the `value` field of the `_previousData` object
-            //       if the field was not specified. It means that it didn't changed.
+            // NOTE: takes the `segment` field of the `_previousData` object
+            //       if it was not specified.
             this._previousData[key] = this._previousData[key] || {}
-            _serialzeDataMatrix[key] = data[key]["value"] || this._previousData[key]["value"];
+            _serialzeDataMatrix[key] = data[key].segment || this._previousData[key].segment;
             
             Object.keys(data[key].args).forEach( (arg_key) => {
               var arg_val = data[key].args[arg_key];
