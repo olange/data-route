@@ -12,6 +12,15 @@
   <script>
     /**
      * `data-route`
+     * DOCUMENTATION DEPRECATED the new structure is :
+     * {
+     *   foo: "view1",
+     *    arg1: "val1"
+     *    ....
+     * }
+     * and <data-route> only eats one segement !
+     *
+     *---------------------------------------------------------------------
      * A modular router supporting data-matrix pattern in path segments
      *
      * Example of usage with the following route path and pattern: 
@@ -71,8 +80,7 @@
           /** The unserialized data structure that can be used. */ 
           data: {
             type: Object,
-            notify: true,
-            observer: "_dataChanged"
+            notify: true
           },
           /**
            * Used to determine the previous data.
@@ -90,19 +98,36 @@
           tail: {
             type: Object,
             notify: true
+          },
+          _patternName: {
+            type: String,
+            value: ""
           }
         };
+ 
+      }
+      static get observers(){ 
+        return [
+          "_dataContentChanged( data.*)"  
+        ]
       }
 
       ready() {
         super.ready();
+        console.log ("DATA-ROUTE> Ready!")
       }
 
       /** Updates `_appData` when the reference of the `data` object changes. */
       _dataChanged(data){
-        console.log("DATA-ROUTE: data changed to:", data);
-        this._updateAppData(data);
+        console.log("DATA-ROUTE> data changed to:", data);
+        this._updateAppData( data);
       }
+
+      _dataContentChanged( dataRecord){
+        console.log("DATA-ROUTE> data content changed to:", dataRecord.base )
+        this._updateAppData( dataRecord.base)
+      }
+
 
       /** 
        * Serializes the `data` object to be used by <app-route>. The URL
@@ -112,10 +137,13 @@
        *       do not trigger a notification loop on `_appData`.       
        */
       _updateAppData( data){
-        var serialzeDataMatrix = this._serialzeDataMatrix(data);
-        Object.keys(serialzeDataMatrix).forEach( (key) => {
-          this.set("_appData."+key, serialzeDataMatrix[key]);
-        })
+        this._debouncer = Polymer.Debouncer.debounce( this._debouncer, 
+          Polymer.Async.timeOut.after(500), () => {
+            var serialzedDataMatrix = {}
+            serialzedDataMatrix[this._patternName] = this._serialzeDataMatrix( data);
+            this.set("_appData", serialzedDataMatrix)
+          }
+        )
       }
 
       /** 
@@ -125,7 +153,7 @@
        * that is used to compute default values.
        */
       _appDataChanged(appData){
-        console.log("DATA-ROUTE: appData changed to:", appData);
+        console.log("DATA-ROUTE> appData changed to:", appData);
         this.data = this._deserialzeDataMatrix(appData);
         this._previousData = this.data;
       }
@@ -136,13 +164,12 @@
         var arg_key, arg_val;
 
         Object.keys(appData).forEach( (key) => {
+          this._patternName = key;
           var dataSegments = appData[key].split(";");
-          deserialzedDataMatrix[key] = {}
-          deserialzedDataMatrix[key].segment = dataSegments.shift();
-          deserialzedDataMatrix[key].args = {};
+          deserialzedDataMatrix[key] = dataSegments.shift();
           dataSegments.forEach( (arg) => {
             [arg_key, arg_val] = arg.split("=");
-            deserialzedDataMatrix[key]["args"][arg_key] = arg_val;
+            deserialzedDataMatrix[arg_key] = arg_val;
           })
         })
         return deserialzedDataMatrix;
@@ -150,23 +177,13 @@
 
       /** Serializes the data to string matrix that can be used in the URL */
       _serialzeDataMatrix(data) {
-        var _serialzeDataMatrix = {};
-        
+        var _serialzedDataMatrix = data[this._patternName] || "";
         Object.keys(data).forEach( (key) => {
-          if(key != "args"){
-
-            // NOTE: takes the `segment` field of the `_previousData` object
-            //       if it was not specified.
-            this._previousData[key] = this._previousData[key] || {}
-            _serialzeDataMatrix[key] = data[key].segment || this._previousData[key].segment;
-            
-            Object.keys(data[key].args).forEach( (arg_key) => {
-              var arg_val = data[key].args[arg_key];
-              _serialzeDataMatrix[key] += ";"+arg_key+"="+arg_val;
-            })
+          if (key != this._patternName) {
+            _serialzedDataMatrix += ";"+key+"="+data[key];
           }
         })
-        return _serialzeDataMatrix;
+        return _serialzedDataMatrix;
       }
     }
 
