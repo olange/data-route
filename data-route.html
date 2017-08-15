@@ -13,43 +13,37 @@
     /**
      * `data-route` is a modular router that supports `data-matrix` pattern.
      *
-     * NOTE: Currently, it only supports one pattern matcher. Thus having the following
-     *       pattern won't work `pattern=/:page1/:page2` for `:page2`. 
-     *
      * Example of usage with the following route path and pattern: 
      *  
      *    route.path = /drilldown;date=20170815;groupy=assetClass,status/
      *
      *    <data-route route="{{route}}"
-     *                pattern="/:foo/:zoo"
-     *                data="{{dataRoute}}"></data-route>
+     *                pattern="/:page"
+     *                data="{{dataRoute}}"
+     *                tail="subroute"></data-route>
      *
      *  The output {{dataRoute}} will be the following:
      *  
-     *    { 
-     *      foo: {
-     *       segment: "view1",
-     *       arg:     {paramA: "valA", paramB: "valB"},
-     *      },
-     *      zoo: {
-     *        segment: "view2",
-     *        args:    {paramC: "valC"}
-     *      }
+     *    { page: "drilldown",
+     *      date: "20170815",
+     *      groupy: ["assetClass", "status"]
      *    }  
      *      
-     *  It automatically synchronize the url location when modifying 
-     *  the {{dataRoute}} object. Eg:
-     *    
-     *    this.dataRoute = {
-     *      foo: {
-     *        args: {paramA: "XXX"}
-     *      }
-     *    }
+     *  It automatically synchronizes the URL location. Then, when modifying 
+     *  the {{dataRoute}} object it will propagate changes to the browser URL. 
+     *  Example: 
      *
-     * NOTE: The implementation of this element doesn't extend 
-     *       `<app-route>` since we need to intercept its `data`.
-     *       Thus two different bindings are needed. Else, it is
-     *       not possible to intercept and treat the `data`.
+     *    After the following updates:
+     *      - this.set("dataRoute.page", "trend")
+     *      - this.set("dataRoute.date", "20170816")
+     *      - this.set("dataRoute.groupby", ["btTransType", "status"])
+     *
+     *    The URL would be: /trend;date=20170816;groupby=btTransType,status/
+     *
+     * NOTE: The implementation of this element doesn't extend  `<app-route>`
+     *       on purpose. This is because we need to intercept the `data` property
+     *       of `<app-route>`, compute the `data` property of `<data-route>` and
+     *       propagate the `data` of <`data-route`> in the upward direction.
      * 
      * @customElement
      * @polymer
@@ -59,25 +53,33 @@
       static get is() { return 'data-route'; }
       static get properties() {
         return {
+          /* The given route (that comes from `<app-location`>) */ 
           route: {
             type: Object,
-            notify: false
+            notify: false,
+            readOnly: false
           },
+          /* The `data` coming from or going to `<app-route>` */
           _appData: {
             type: Object,
             notify: false,
           },
+          /* The data matrix content */
           data: {
             type: Object,
             notify: true
           },
+          /* The given pattern */
           pattern: {
             type: String,
-            notify: false
+            notify: false,
+            readOnly: false
           },
+          /* The previous route.path that is kept to avoid infinite looping */
           _previousRoutePath: {
             type: String,
-            notify: false
+            notify: false,
+            readOnly: true
           }
         }
       };
@@ -89,45 +91,41 @@
         ]
       }
 
-      /* Direction DOWN, unserializes the _appData to data */ 
+      /* Unserializes the `_appData` to `data` and updates the `_appData` */ 
       _updateAppDataOnDataChanged( dataRecord) {
-        var serializedAppData = this._serialzeDataMatrix( dataRecord.base)
-        
-        //console.log("**** DATA CHANGED FROM PARENT", dataRecord.base, serializedAppData, this._previousRoutePath)
-        
+        //console.log("DATA-ROUTE> DATA CHANGED", dataRecord.base)
         var _appData = {}
+        var serializedAppData = this._serialzeDataMatrix( dataRecord.base)
         var firstPatternPiece = this._getFirstPatternPiece()
         _appData[firstPatternPiece] = serializedAppData;
         this._appData = _appData;
       }
 
-      /* DIRECTON UP, serializes the data to _appData */
+      /* Serializes the `data` matrix to `_appData` and updates `data` */
       _updateDataOnAppDataChanged( _appData){
-        if(!this.route){ 
-          return;
-        }
+        //console.log("DATA-ROUTE>", _appData, dataMatrix)
+        if(!this.route){ return; }
 
-        var previousRoutePath = this._previousRoutePath;
         var routePath = this.route.path;
-        if( previousRoutePath === routePath){ 
-          return;
-        }
+        var previousRoutePath = this._previousRoutePath;
+        if( previousRoutePath === routePath){ return; }
+
         var dataMatrix = this._deserialzeDataMatrix( _appData);
-        
-        //console.log("**** APPDATA CHANGED FROM CHILD", _appData, dataMatrix)
-        
-        if(routePath.slice(-1) != "/"){
-          routePath += "/";
-        }
+        if(routePath.slice(-1) != "/"){ routePath += "/"; } // Make sure we activate the next subroute !
         this.setProperties({
-          "_previousRoutePath": this.route.path,
           "data": dataMatrix,
-          "route.path": routePath
-        })
-        
+          "route.path": routePath,
+          "_previousRoutePath": this.route.path
+        }, true)
       }
 
-      /** Unserializes the data matrix string given by the `appData` of the `<app-route>` */
+      /** 
+       * Unserializes the data matrix string given by the `appData` of the `<app-route>` 
+       *
+       * Example: 
+       *   Input:  appData = {page: "/drilldown;date=20170815;groupby=assetClass/status"}
+       *   Output: return { page: "drilldown", date: "20170815", "groupby": ["assetClass", "status"] }
+       */
       _deserialzeDataMatrix(appData) {
         var deserialzedDataMatrix = {};
         var arg_key, arg_val, multi_arg_val;
@@ -149,7 +147,12 @@
         return deserialzedDataMatrix;
       }
 
-      /** Serializes the data to string matrix that can be used in the URL */
+      /** 
+       * Serializes the data to string matrix that can be used in the URL
+       * Example: 
+       *   input:  data = { page: "drilldown", date: "20170815", "groupby": ["assetClass", "status"] }
+       *   Output: return {page: "/drilldown;date=20170815;groupby=assetClass/status"}
+       */
       _serialzeDataMatrix(data) {
         var _serialzedDataMatrix = data[this._patternName] || "";
         Object.keys(data).forEach( (key) => {
@@ -160,10 +163,14 @@
         return _serialzedDataMatrix;
       }
 
+      /**
+       * Returns the first pattern matcher found
+       *
+       * Example:
+       *  pattern="/:page1/:page2" would return "page1"
+       */
       _getFirstPatternPiece(){
-        if(!this.pattern){
-          return;
-        }
+        if(!this.pattern){return;}
         
         var patternPieces = this.pattern.split('/');
         var firstPatternPiece = patternPieces[1];
