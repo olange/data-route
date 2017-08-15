@@ -4,12 +4,57 @@
 <dom-module id="data-route">
   <template>
     <app-route route="{{route}}"
-                pattern="{{pattern}}"
-                tail="{{tail}}"
-                data="{{_appData}}">
+               pattern="{{pattern}}"
+               tail="{{tail}}"
+               data="{{_appData}}">
     </app-route>
   </template>
   <script>
+    /**
+     * `data-route` is a modular router that supports `data-matrix` pattern.
+     *
+     * NOTE: Currently, it only supports one pattern matcher. Thus having the following
+     *       pattern won't work `pattern=/:page1/:page2` for `:page2`. 
+     *
+     * Example of usage with the following route path and pattern: 
+     *  
+     *    route.path = /drilldown;date=20170815;groupy=assetClass,status/
+     *
+     *    <data-route route="{{route}}"
+     *                pattern="/:foo/:zoo"
+     *                data="{{dataRoute}}"></data-route>
+     *
+     *  The output {{dataRoute}} will be the following:
+     *  
+     *    { 
+     *      foo: {
+     *       segment: "view1",
+     *       arg:     {paramA: "valA", paramB: "valB"},
+     *      },
+     *      zoo: {
+     *        segment: "view2",
+     *        args:    {paramC: "valC"}
+     *      }
+     *    }  
+     *      
+     *  It automatically synchronize the url location when modifying 
+     *  the {{dataRoute}} object. Eg:
+     *    
+     *    this.dataRoute = {
+     *      foo: {
+     *        args: {paramA: "XXX"}
+     *      }
+     *    }
+     *
+     * NOTE: The implementation of this element doesn't extend 
+     *       `<app-route>` since we need to intercept its `data`.
+     *       Thus two different bindings are needed. Else, it is
+     *       not possible to intercept and treat the `data`.
+     * 
+     * @customElement
+     * @polymer
+     * @demo demo/index.html
+     */
     class DataRoute extends Polymer.Element {
       static get is() { return 'data-route'; }
       static get properties() {
@@ -71,10 +116,15 @@
         
         //console.log("**** APPDATA CHANGED FROM CHILD", _appData, dataMatrix)
         
+        if(routePath.slice(-1) != "/"){
+          routePath += "/";
+        }
         this.setProperties({
           "_previousRoutePath": this.route.path,
-          "data": dataMatrix
+          "data": dataMatrix,
+          "route.path": routePath
         })
+        
       }
 
       /** Unserializes the data matrix string given by the `appData` of the `<app-route>` */
@@ -89,7 +139,11 @@
           dataSegments.forEach( (arg) => {
             [arg_key, arg_val] = arg.split("=");
             multi_arg_val = arg_val.split(",")
-            deserialzedDataMatrix[arg_key] = multi_arg_val;
+            if(multi_arg_val.length > 1){
+              deserialzedDataMatrix[arg_key] = multi_arg_val;
+            } else {
+              deserialzedDataMatrix[arg_key] = arg_val;
+            }
           })
         })
         return deserialzedDataMatrix;
