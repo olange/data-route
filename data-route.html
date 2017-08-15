@@ -4,164 +4,83 @@
 <dom-module id="data-route">
   <template>
     <app-route route="{{route}}"
-               pattern="{{pattern}}"
-               tail="{{tail}}"
-               data="{{_appData}}">
+                pattern="{{pattern}}"
+                tail="{{tail}}"
+                data="{{_appData}}">
     </app-route>
   </template>
   <script>
-    /**
-     * `data-route`
-     * DOCUMENTATION DEPRECATED the new structure is :
-     * {
-     *   foo: "view1",
-     *    arg1: "val1"
-     *    ....
-     * }
-     * and <data-route> only eats one segement !
-     *
-     *---------------------------------------------------------------------
-     * A modular router supporting data-matrix pattern in path segments
-     *
-     * Example of usage with the following route path and pattern: 
-     *  
-     *    route.path = /view1;paramA=valA;paramB=valB/view2;paramC=valC/
-     *
-     *    <data-route route="{{route}}"
-     *                pattern="/:foo/:zoo"
-     *                data="{{dataRoute}}"></data-route>
-     *
-     *  The output {{dataRoute}} will be the following:
-     *  
-     *    { 
-     *      foo: {
-     *       segment: "view1",
-     *       arg:     {paramA: "valA", paramB: "valB"},
-     *      },
-     *      zoo: {
-     *        segment: "view2",
-     *        args:    {paramC: "valC"}
-     *      }
-     *    }  
-     *      
-     *  It automatically synchronize the url location when modifying 
-     *  the {{dataRoute}} object. Eg:
-     *    
-     *    this.dataRoute = {
-     *      foo: {
-     *        args: {paramA: "XXX"}
-     *      }
-     *    }
-     *
-     * NOTE: The implementation of this element doesn't extend 
-     *       `<app-route>` since we need to intercept its `data`.
-     *       Thus two different bindings are needed. Else, it is
-     *       not possible to intercept and treat the `data`.
-     * 
-     * @customElement
-     * @polymer
-     * @demo demo/index.html
-     */
     class DataRoute extends Polymer.Element {
       static get is() { return 'data-route'; }
       static get properties() {
         return {
-          /** The route used by `<app-route>` */
           route: {
             type: Object,
-            notify: true
+            notify: false
           },
-          /** The data that comes from `<app-route>` */
           _appData: {
             type: Object,
             notify: false,
-            observer: "_appDataChanged"
           },
-          /** The unserialized data structure that can be used. */ 
           data: {
             type: Object,
             notify: true
           },
-          /**
-           * Used to determine the previous data.
-           */
-          _previousData: {
-            type: Object,
-            notify: false
-          },
-          /** Pattern used by the `<app-route>` */
           pattern: {
             type: String,
-            notify: true
+            notify: false
           },
-          /** Tail given by the `<app-route>` */
-          tail: {
-            type: Object,
-            notify: true
-          },
-          _patternName: {
+          _previousRoutePath: {
             type: String,
-            value: ""
+            notify: false
           }
-        };
- 
-      }
-      static get observers(){ 
+        }
+      };
+      
+      static get observers() {
         return [
-          "_dataContentChanged( data.*)"  
+          "_updateDataOnAppDataChanged( _appData)",
+          "_updateAppDataOnDataChanged( data.*)"
         ]
       }
 
-      ready() {
-        super.ready();
-        console.log ("DATA-ROUTE> Ready!")
+      /* Direction DOWN, unserializes the _appData to data */ 
+      _updateAppDataOnDataChanged( dataRecord) {
+        var serializedAppData = this._serialzeDataMatrix( dataRecord.base)
+        
+        //console.log("**** DATA CHANGED FROM PARENT", dataRecord.base, serializedAppData, this._previousRoutePath)
+        
+        var _appData = {}
+        var firstPatternPiece = this._getFirstPatternPiece()
+        _appData[firstPatternPiece] = serializedAppData;
+        this._appData = _appData;
       }
 
-      /** Updates `_appData` when the reference of the `data` object changes. */
-      _dataChanged(data){
-        console.log("DATA-ROUTE> data changed to:", data);
-        this._updateAppData( data);
-      }
+      /* DIRECTON UP, serializes the data to _appData */
+      _updateDataOnAppDataChanged( _appData){
+        if(!this.route){ 
+          return;
+        }
 
-      _dataContentChanged( dataRecord){
-        console.log("DATA-ROUTE> data content changed to:", dataRecord.base )
-        this._updateAppData( dataRecord.base)
-      }
-
-
-      /** 
-       * Serializes the `data` object to be used by <app-route>. The URL
-       * is automatically changed when updating the `_appData` object.
-       *
-       * NOTE: it updates each keys one by one to make sure we
-       *       do not trigger a notification loop on `_appData`.       
-       */
-      _updateAppData( data){
-        this._debouncer = Polymer.Debouncer.debounce( this._debouncer, 
-          Polymer.Async.timeOut.after(500), () => {
-            var serialzedDataMatrix = {}
-            serialzedDataMatrix[this._patternName] = this._serialzeDataMatrix( data);
-            this.set("_appData", serialzedDataMatrix)
-          }
-        )
-      }
-
-      /** 
-       * Unserializes the data matrix string given by the `appData` of the `<app-route>` 
-       * and set the outputed `data` object that is exposed to the user.
-       * It also stores a copy of the `data` object to the instance variable called `_previousData`
-       * that is used to compute default values.
-       */
-      _appDataChanged(appData){
-        console.log("DATA-ROUTE> appData changed to:", appData);
-        this.data = this._deserialzeDataMatrix(appData);
-        this._previousData = this.data;
+        var previousRoutePath = this._previousRoutePath;
+        var routePath = this.route.path;
+        if( previousRoutePath === routePath){ 
+          return;
+        }
+        var dataMatrix = this._deserialzeDataMatrix( _appData);
+        
+        //console.log("**** APPDATA CHANGED FROM CHILD", _appData, dataMatrix)
+        
+        this.setProperties({
+          "_previousRoutePath": this.route.path,
+          "data": dataMatrix
+        })
       }
 
       /** Unserializes the data matrix string given by the `appData` of the `<app-route>` */
       _deserialzeDataMatrix(appData) {
         var deserialzedDataMatrix = {};
-        var arg_key, arg_val;
+        var arg_key, arg_val, multi_arg_val;
 
         Object.keys(appData).forEach( (key) => {
           this._patternName = key;
@@ -169,7 +88,8 @@
           deserialzedDataMatrix[key] = dataSegments.shift();
           dataSegments.forEach( (arg) => {
             [arg_key, arg_val] = arg.split("=");
-            deserialzedDataMatrix[arg_key] = arg_val;
+            multi_arg_val = arg_val.split(",")
+            deserialzedDataMatrix[arg_key] = multi_arg_val;
           })
         })
         return deserialzedDataMatrix;
@@ -185,8 +105,20 @@
         })
         return _serialzedDataMatrix;
       }
-    }
 
+      _getFirstPatternPiece(){
+        if(!this.pattern){
+          return;
+        }
+        
+        var patternPieces = this.pattern.split('/');
+        var firstPatternPiece = patternPieces[1];
+        if (firstPatternPiece[0] == ':') {
+          firstPatternPiece = firstPatternPiece.slice(1);
+        }
+        return firstPatternPiece;
+      }
+    }
     window.customElements.define(DataRoute.is, DataRoute);
   </script>
 </dom-module>
