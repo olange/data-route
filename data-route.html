@@ -6,7 +6,8 @@
     <app-route route="{{route}}"
                pattern="{{pattern}}"
                tail="{{tail}}"
-               data="{{_appData}}">
+               data="{{_appData}}"
+               active="{{active}}">
     </app-route>
   </template>
   <script>
@@ -61,6 +62,10 @@
           },
           tail: {
             type: Object,
+            notify: true
+          },
+          active: {
+            type: Boolean,
             notify: true
           },
           /* The `data` coming from or going to `<app-route>` */
